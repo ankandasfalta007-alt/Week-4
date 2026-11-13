@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NexisCode</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--card:#f4f4f2;--ac:#2f5bea}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#232323;--ac:#7a9bff}}
+body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--fg);display:grid;grid-template-columns:1fr 260px;height:100vh}
+main{display:flex;flex-direction:column;padding:16px;min-width:0}aside{background:var(--card);padding:16px;overflow:auto}
+#log{flex:1;overflow:auto;white-space:pre-wrap}.u{color:var(--ac);margin-top:12px}.a{margin-bottom:8px}
+input,button{font:inherit;padding:8px;border-radius:6px;border:1px solid #8884;background:var(--card);color:var(--fg)}
+button{cursor:pointer}#row{display:flex;gap:6px;margin-top:8px}#msg{flex:1}
+#auth{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center}
+@media(max-width:700px){body{grid-template-columns:1fr}aside{display:none}}
+</style></head><body>
+<div id="auth"><h2>NexisCode</h2><input id="em" placeholder="email"><input id="pw" type="password" placeholder="password (8+)">
+<div><button onclick="go('login')">Log in</button> <button onclick="go('register')">Register</button></div><small id="err"></small></div>
+<main><div id="log"></div>
+<div id="row"><input id="msg" placeholder="Ask a coding question…" onkeydown="if(event.key==='Enter')send()">
+<input type="file" id="img" accept="image/*" style="max-width:110px"><button onclick="send()">Send</button></div></main>
+<aside><h3>Knowledge base</h3><input type="file" id="doc" accept=".pdf,.txt,.md,.py,.js,.ts"><button onclick="up()">Upload</button><p id="upmsg"></p>
+<h3>Usage</h3><pre id="stats">–</pre></aside>
+<script>
+let T=localStorage.getItem('t');const $=i=>document.getElementById(i);
+const H=()=>({Authorization:'Bearer '+T});
+if(T)$('auth').style.display='none',stats();
+async function go(k){const r=await fetch('/auth/'+k,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('em').value,password:$('pw').value})});
+const j=await r.json();if(!r.ok){$('err').textContent=j.detail;return}T=j.token;localStorage.setItem('t',T);$('auth').style.display='none';stats()}
+async function send(){const m=$('msg').value.trim();if(!m)return;$('msg').value='';
+$('log').insertAdjacentHTML('beforeend','<div class="u"></div><div class="a"></div>');
+const [u,a]=[...document.querySelectorAll('.u')].slice(-1).concat([...document.querySelectorAll('.a')].slice(-1));u.textContent='You: '+m;
+const f=new FormData();f.append('message',m);if($('img').files[0])f.append('image',$('img').files[0]);
+const r=await fetch('/chat',{method:'POST',headers:H(),body:f});
+if(r.status===401){localStorage.removeItem('t');location.reload()}
+const rd=r.body.getReader(),d=new TextDecoder();for(;;){const{done,value}=await rd.read();if(done)break;a.textContent+=d.decode(value);$('log').scrollTop=1e9}
+$('img').value='';stats()}
+async function up(){const f=new FormData();f.append('file',$('doc').files[0]);const r=await fetch('/ingest',{method:'POST',headers:H(),body:f});
+const j=await r.json();$('upmsg').textContent=r.ok?j.chunks+' chunks indexed':j.detail}
+async function stats(){const r=await fetch('/analytics',{headers:H()});if(!r.ok)return;const j=await r.json();
+$('stats').textContent=`requests  ${j.requests}\nin tokens ${j.input_tokens}\nout tokens ${j.output_tokens}\navg lat   ${j.avg_latency_s}s\nblocked   ${j.blocked}\n\n`+j.daily.map(d=>`${d.day}  ${d.n} req`).join('\n')}
+</script></body></html>
